@@ -1,8 +1,7 @@
 package kovalscj
 
-import kotlinx.serialization.Decoder
-import kotlinx.serialization.DeserializationStrategy
-import kotlinx.serialization.SerialDescriptor
+import kotlinx.serialization.*
+import kotlinx.serialization.internal.*
 import kotlinx.serialization.json.*
 import kovalscj.JsonSchema.*
 import kovalscj.ValidationResult.Invalid
@@ -11,6 +10,7 @@ import kovalscj.ValidationResult.Valid
 // TODO: add paths or root+parent+index (?)
 // TODO: add path resolving
 
+@Serializable
 sealed class JsonSchema : Validating {
 
     companion object {
@@ -23,10 +23,6 @@ sealed class JsonSchema : Validating {
         operator fun invoke(json: String): JsonSchema {
             return JSON.parse(Deserializer, json)
         }
-
-        operator fun invoke(json: JsonObject): JsonSchema {
-            TODO("Not yet implemented!")
-        }
     }
 
     interface Component {
@@ -34,7 +30,12 @@ sealed class JsonSchema : Validating {
     }
 
     enum class DataType {
-        Null, Boolean, Array, Object, Number, String
+        Null, Boolean, Array, Object, Number, String, Integer
+    }
+
+    @Serializer(forClass = JsonSchema::class)
+    internal object Serializer: KSerializer<JsonSchema> {
+
     }
 
     internal object Deserializer : DeserializationStrategy<JsonSchema> {
