@@ -10,7 +10,7 @@ import kovalscj.ValidationResult.Valid
 // TODO add paths
 // TODO add coverage
 // TODO adapt for Draft 8, copy-paste doc
-// TODO add rest
+// TODO add missing assertions
 
 sealed class Assertion(override val key: String) : Component, Validating {
 

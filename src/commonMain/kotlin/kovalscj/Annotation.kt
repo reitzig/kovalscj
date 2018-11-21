@@ -6,7 +6,7 @@ import kovalscj.JsonSchema.Component
 // TODO add rest
 
 sealed class Annotation(override val key: String) : Component {
-    data class Id(val value: String) : Annotation("id")
+    data class Id(val value: String) : Annotation("\$id")
     data class Title(val value: String) : Annotation("title")
     data class Description(val value: String) : Annotation("description")
 
