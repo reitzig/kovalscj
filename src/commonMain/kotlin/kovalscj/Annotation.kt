@@ -10,5 +10,17 @@ sealed class Annotation(override val key: String) : Component {
     data class Title(val value: String) : Annotation("title")
     data class Description(val value: String) : Annotation("description")
 
+    /* * * * * * * *
+     *
+     * 9. Schema Re-Use With "definitions"
+     *
+     * * * * * * * */
+
+    /**
+     * The "definitions" keywords provides a standardized location for schema authors to inline re-usable
+     * JSON Schemas into a more general schema. The keyword does not directly affect the validation result.
+     *
+     * This keyword's value MUST be an object. Each member value of this object MUST be a valid JSON Schema.
+     */
     data class Definitions(val definitions: Map<String, JsonSchema>) : Annotation("definitions")
 }

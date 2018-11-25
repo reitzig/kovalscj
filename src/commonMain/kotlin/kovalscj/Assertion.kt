@@ -1,6 +1,7 @@
 package kovalscj
 
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import kovalscj.JsonSchema.Component
 import kovalscj.JsonSchema.DataType
 import kovalscj.ValidationResult.Invalid
@@ -22,17 +23,25 @@ sealed class Assertion(override val key: String) : Component, Validating {
 
 
     /**
-     * The value of this keyword MUST be either a string or an array. If it is an array, elements of the array MUST be strings and MUST be unique.
+     * The value of this keyword MUST be either a string or an array. If it is an array, elements of the array MUST be
+     * strings and MUST be unique.
      *
-     * String values MUST be one of the six primitive types ("null", "boolean", "object", "array", "number", or "string"), or "integer" which matches any number with a zero fractional part.
+     * String values MUST be one of the six primitive types ("null", "boolean", "object", "array", "number", or "string"),
+     * or "integer" which matches any number with a zero fractional part.
      * An instance validates if and only if the instance is in any of the sets listed for this keyword.
      */
     data class Type(val type: DataType) : Assertion("type") {
-        override fun validate(json: JsonElement): ValidationResult {
+        override fun validate(json: JsonElement, options: ValidationOptions): ValidationResult {
             return if (json.`is`(type)) {
-                Valid(json)
+                Valid(options)
             } else {
-                Invalid(ValidationError("Value is not one of type $type"))
+                Invalid(
+                    ValidationMessage("Value is not one of type $type",
+                        JsonPath(listOf()), // TODO implement
+                        JsonPath(listOf()) // TODO implement
+                    ),
+                    options
+                )
             }
         }
     }
@@ -40,16 +49,23 @@ sealed class Assertion(override val key: String) : Component, Validating {
     /**
      * The value of this keyword MUST be an array. This array SHOULD have at least one element. Elements in the array SHOULD be unique.
      *
-     * An instance validates successfully against this keyword if its value is equal to one of the elements in this keyword's array value.
+     * An instance validates successfully against this keyword if its value is equal to one of the elements in
+     * this keyword's array value.
      *
      * Elements in the array might be of any value, including null.
      */
     data class Enum(val values: List<JsonElement>) : Assertion("enum") {
-        override fun validate(json: JsonElement): ValidationResult {
+        override fun validate(json: JsonElement, options: ValidationOptions): ValidationResult {
             return if (values.contains(json)) {
-                Valid(json)
+                Valid(options)
             } else {
-                Invalid(ValidationError("Value is not one of [${values.joinToString(", ")}]"))
+                Invalid(
+                    ValidationMessage("Value is not one of [${values.joinToString(", ")}]",
+                        JsonPath(listOf()), // TODO implement
+                        JsonPath(listOf()) // TODO implement
+                    ),
+                    options
+                )
             }
         }
     }
@@ -60,92 +76,174 @@ sealed class Assertion(override val key: String) : Component, Validating {
      * An instance validates successfully against this keyword if its value is equal to the value of the keyword.
      */
     data class Const(val value: JsonElement) : Assertion("const") {
-        override fun validate(json: JsonElement): ValidationResult {
+        override fun validate(json: JsonElement, options: ValidationOptions): ValidationResult {
             return if (value == json) {
-                Valid(json)
+                Valid(options)
             } else {
-                Invalid(ValidationError("Value is not $value"))
+                Invalid(
+                    ValidationMessage("Value is not $value",
+                        JsonPath(listOf()), // TODO implement
+                        JsonPath(listOf()) // TODO implement
+                    ),
+                    options
+                )
             }
         }
     }
 
     /* * * * * * * *
-     *
-     * 6.7. Keywords for Applying Subschemas With Boolean Logic
-     *
-     * * * * * * * */
+    *
+    * 6.5. Validation Keywords for Objects
+    *
+    * * * * * * * */
 
     /**
-     * This keyword's value MUST be a non-empty array. Each item of the array MUST be a valid JSON Schema.
+     * The value of "properties" MUST be an object. Each value of this object MUST be a valid JSON Schema.
      *
-     * An instance validates successfully against this keyword if it validates successfully against all schemas defined by this keyword's value.
+     * This keyword determines how child instances validate for objects, and does not directly validate the
+     * immediate instance itself.
+     *
+     * Validation succeeds if, for each name that appears in both the instance and as a name within this
+     * keyword's value, the child instance for that name successfully validates against the corresponding schema.
+     *
+     * Omitting this keyword has the same behavior as an empty object.
      */
+    data class Properties(val propertySchemas: Map<String, Schema>) : Assertion("properties") {
+        override fun validate(json: JsonElement, options: ValidationOptions): ValidationResult {
+            require(json is JsonObject)
+
+            // TODO: keep a record for additionalProperties
+            return json.content.
+                mapNotNull { propertySchemas[it.key]?.validate(it.value, options) }.
+                reduce(ValidationResult::plus)
+        }
+    }
+
+    /* * * * * * * *
+    *
+    * 6.7. Keywords for Applying Subschemas With Boolean Logic
+    *
+    * * * * * * * */
+
+    /**
+    * This keyword's value MUST be a non-empty array. Each item of the array MUST be a valid JSON Schema.
+    *
+    * An instance validates successfully against this keyword if it validates successfully against all schemas
+    * defined by this keyword's value.
+    */
     data class AllOf(val subSchemas : List<JsonSchema>) : Assertion("allOf") {
-        init {
-            require(subSchemas.isNotEmpty())
-        }
+       init {
+           require(subSchemas.isNotEmpty())
+       }
 
-        override fun validate(json: JsonElement): ValidationResult {
-            // TODO add this-level error
-            return subSchemas.map { it.validate(json) }.reduce(ValidationResult::plus)
-        }
+       override fun validate(json: JsonElement, options: ValidationOptions): ValidationResult {
+           // TODO add this-level error
+           return subSchemas.map { it.validate(json, options) }.reduce(ValidationResult::plus)
+       }
     }
 
     /**
-     * This keyword's value MUST be a non-empty array. Each item of the array MUST be a valid JSON Schema.
-     *
-     * An instance validates successfully against this keyword if it validates successfully against at least one schema defined by this keyword's value.
-     */
+    * This keyword's value MUST be a non-empty array. Each item of the array MUST be a valid JSON Schema.
+    *
+    * An instance validates successfully against this keyword if it validates successfully against at least one
+    * schema defined by this keyword's value.
+    */
     data class AnyOf(val subSchemas: List<JsonSchema>) : Assertion("anyOf") {
-        init {
-            require(subSchemas.isNotEmpty())
-        }
+       init {
+           require(subSchemas.isNotEmpty())
+       }
 
-        override fun validate(json: JsonElement): ValidationResult {
-            val results = subSchemas.map { it.validate(json) }
+       override fun validate(json: JsonElement, options: ValidationOptions): ValidationResult {
+           val results = subSchemas.map { it.validate(json, options) }
 
-            return if (results.any { it is Valid }) {
-                Valid(json)
-            } else {
-                // TODO add this-level error
-                results.reduce(ValidationResult::plus)
-            }
-        }
+           return if (results.any { it.valid }) {
+               results.reduce(ValidationResult::plus).copy(valid = true, errors = listOf())
+           } else {
+               // TODO add this-level error
+               results.reduce(ValidationResult::plus)
+           }
+       }
     }
 
     /**
-     * This keyword's value MUST be a non-empty array. Each item of the array MUST be a valid JSON Schema.
-     *
-     * An instance validates successfully against this keyword if it validates successfully against exactly one schema defined by this keyword's value.
-     */
+    * This keyword's value MUST be a non-empty array. Each item of the array MUST be a valid JSON Schema.
+    *
+    * An instance validates successfully against this keyword if it validates successfully against
+    * exactly one schema defined by this keyword's value.
+    */
     data class OneOf(val subSchemas: List<JsonSchema>) : Assertion("oneOf") {
-        init {
-            require(subSchemas.isNotEmpty())
-        }
+       init {
+           require(subSchemas.isNotEmpty())
+       }
 
-        override fun validate(json: JsonElement): ValidationResult {
-            val results = subSchemas.map { it.validate(json) }
+       override fun validate(json: JsonElement, options: ValidationOptions): ValidationResult {
+           val results = subSchemas.map { it.validate(json, options) }
 
-            return if (results.count { it is Valid } == 1) {
-                Valid(json)
-            } else {
-                // TODO add this-level error
-                results.reduce(ValidationResult::plus)
-            }
-        }
+           return if (results.count { it.valid } == 1) {
+               results.reduce(ValidationResult::plus).copy(valid = true, errors = listOf())
+           } else {
+               // TODO add this-level error
+               results.reduce(ValidationResult::plus)
+           }
+       }
     }
 
     /**
-     * This keyword's value MUST be a valid JSON Schema.
-     *
-     * An instance is valid against this keyword if it fails to validate successfully against the schema defined by this keyword.
-     */
+    * This keyword's value MUST be a valid JSON Schema.
+    *
+    * An instance is valid against this keyword if it fails to validate successfully against the schema
+    * defined by this keyword.
+    */
     data class Not(val schema: JsonSchema) : Assertion("not") {
-        override fun validate(json: JsonElement): ValidationResult {
-            return when (schema.validate(json)) {
-                is Valid -> Invalid(ValidationError("Validated against $schema"))
-                is Invalid -> Valid(json)
-            }
-        }
+       override fun validate(json: JsonElement, options: ValidationOptions): ValidationResult {
+           val result = schema.validate(json, options)
+
+           return if (result.valid) {
+               result.copy(
+                   valid = false,
+                   errors = listOf(
+                       ValidationMessage(
+                           "Instance validated against forbidden schema.",
+                           JsonPath(listOf()), // TODO implement
+                           JsonPath(listOf()) // TODO implement
+                       )
+                   )
+               )
+           } else {
+               result.copy(valid = true, errors = listOf())
+           }
+       }
+    }
+
+    /* * * * * * * *
+    *
+    * 8.3. Schema References With "$ref"
+    *
+    * * * * * * * */
+
+    /**
+    * The "$ref" keyword is used to reference a schema, and provides the ability to validate recursive structures
+    * through self-reference.
+    *
+    * An object schema with a "$ref" property MUST be interpreted as a "$ref" reference. The value of the "$ref"
+    * property MUST be a URI Reference. Resolved against the current URI base, it identifies the URI of a schema to use.
+    * All other properties in a "$ref" object MUST be ignored.
+    *
+    * The URI is not a network locator, only an identifier. A schema need not be downloadable from the address if it
+    * is a network-addressable URL, and implementations SHOULD NOT assume they should perform a network operation when
+    * they encounter a network-addressable URI.
+    *
+    * A schema MUST NOT be run into an infinite loop against a schema. For example, if two schemas "#alice" and "#bob"
+    * both have an "allOf" property that refers to the other, a naive validator might get stuck in an infinite recursive
+    * loop trying to validate the instance. Schemas SHOULD NOT make use of infinite recursive nesting like this;
+    * the behavior is undefined.
+    */
+    data class Ref(val url: URL) : Assertion("\$ref") {
+       // TODO extend to handle pointers
+       // TODO extend to prevent endless recursion
+       override fun validate(json: JsonElement, options: ValidationOptions): ValidationResult {
+           // TODO resolve while parsing the schema
+           return JsonSchema(url).validate(json, options)
+       }
     }
 }
