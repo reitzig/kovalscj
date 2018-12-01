@@ -1,7 +1,9 @@
-package kovalscj
+package kovalscj.draft8
 
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kovalscj.*
+import kovalscj.ComponentParser.Companion.parseAsString
 import kovalscj.JsonSchema.Component
 import kovalscj.JsonSchema.DataType
 import kovalscj.ValidationResult.Invalid
@@ -30,19 +32,27 @@ sealed class Assertion(override val key: String) : Component, Validating {
      * or "integer" which matches any number with a zero fractional part.
      * An instance validates if and only if the instance is in any of the sets listed for this keyword.
      */
-    data class Type(val type: DataType) : Assertion("type") {
+    data class Type(val type: DataType) : Assertion(key) {
         override fun validate(json: JsonElement, options: ValidationOptions): ValidationResult {
             return if (json.`is`(type)) {
                 Valid(options)
             } else {
                 Invalid(
-                    ValidationMessage("Value is not one of type $type",
-                        JsonPath(listOf()), // TODO implement
-                        JsonPath(listOf()) // TODO implement
+                    ValidationMessage(
+                        "Value is not one of type $type",
+                        JsonPointer(listOf()), // TODO implement
+                        JsonPointer(listOf()) // TODO implement
                     ),
                     options
                 )
             }
+        }
+
+        companion object : ComponentParser<Type> {
+            override val key: String = "type"
+
+            override fun parse(json: JsonElement, pointer: JsonPointer): Type =
+                Type(DataType.parseFromString(parseAsString(json)))
         }
     }
 
@@ -60,9 +70,10 @@ sealed class Assertion(override val key: String) : Component, Validating {
                 Valid(options)
             } else {
                 Invalid(
-                    ValidationMessage("Value is not one of [${values.joinToString(", ")}]",
-                        JsonPath(listOf()), // TODO implement
-                        JsonPath(listOf()) // TODO implement
+                    ValidationMessage(
+                        "Value is not one of [${values.joinToString(", ")}]",
+                        JsonPointer(listOf()), // TODO implement
+                        JsonPointer(listOf()) // TODO implement
                     ),
                     options
                 )
@@ -81,9 +92,10 @@ sealed class Assertion(override val key: String) : Component, Validating {
                 Valid(options)
             } else {
                 Invalid(
-                    ValidationMessage("Value is not $value",
-                        JsonPath(listOf()), // TODO implement
-                        JsonPath(listOf()) // TODO implement
+                    ValidationMessage(
+                        "Value is not $value",
+                        JsonPointer(listOf()), // TODO implement
+                        JsonPointer(listOf()) // TODO implement
                     ),
                     options
                 )
@@ -131,7 +143,7 @@ sealed class Assertion(override val key: String) : Component, Validating {
     * An instance validates successfully against this keyword if it validates successfully against all schemas
     * defined by this keyword's value.
     */
-    data class AllOf(val subSchemas : List<JsonSchema>) : Assertion("allOf") {
+    data class AllOf(val subSchemas : List<Schema>) : Assertion("allOf") {
        init {
            require(subSchemas.isNotEmpty())
        }
@@ -148,7 +160,7 @@ sealed class Assertion(override val key: String) : Component, Validating {
     * An instance validates successfully against this keyword if it validates successfully against at least one
     * schema defined by this keyword's value.
     */
-    data class AnyOf(val subSchemas: List<JsonSchema>) : Assertion("anyOf") {
+    data class AnyOf(val subSchemas: List<Schema>) : Assertion("anyOf") {
        init {
            require(subSchemas.isNotEmpty())
        }
@@ -171,7 +183,7 @@ sealed class Assertion(override val key: String) : Component, Validating {
     * An instance validates successfully against this keyword if it validates successfully against
     * exactly one schema defined by this keyword's value.
     */
-    data class OneOf(val subSchemas: List<JsonSchema>) : Assertion("oneOf") {
+    data class OneOf(val subSchemas: List<Schema>) : Assertion("oneOf") {
        init {
            require(subSchemas.isNotEmpty())
        }
@@ -194,7 +206,7 @@ sealed class Assertion(override val key: String) : Component, Validating {
     * An instance is valid against this keyword if it fails to validate successfully against the schema
     * defined by this keyword.
     */
-    data class Not(val schema: JsonSchema) : Assertion("not") {
+    data class Not(val schema: Schema) : Assertion("not") {
        override fun validate(json: JsonElement, options: ValidationOptions): ValidationResult {
            val result = schema.validate(json, options)
 
@@ -204,8 +216,8 @@ sealed class Assertion(override val key: String) : Component, Validating {
                    errors = listOf(
                        ValidationMessage(
                            "Instance validated against forbidden schema.",
-                           JsonPath(listOf()), // TODO implement
-                           JsonPath(listOf()) // TODO implement
+                           JsonPointer(listOf()), // TODO implement
+                           JsonPointer(listOf()) // TODO implement
                        )
                    )
                )

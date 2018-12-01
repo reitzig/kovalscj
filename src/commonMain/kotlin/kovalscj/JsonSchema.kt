@@ -1,9 +1,10 @@
 package kovalscj
 
-import kotlinx.serialization.json.JSON
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.JsonTreeParser
+import kovalscj.JsonMetaSchema.Companion.MetaSchemaPointer
 import kovalscj.ValidationOptions.Companion.DEFAULT
 import kovalscj.ValidationOptions.Companion.QUIET
 
@@ -34,34 +35,60 @@ class JsonSchema internal constructor (
     }
 
     companion object {
-        // TODO: add schema cache
-
         operator fun invoke(schema: URL): JsonSchema {
+            // TODO: add schema cache
             return this(download(schema))
         }
 
         operator fun invoke(json: String): JsonSchema {
-            return JSON.parse(JsonSchemaDeserializer, json)
+            // TODO: Make more efficient by directly parsing to `JsonSchema`
+            //       --> custom `DeserializationStrategy<JsonSchema>`
+            return this(JsonTreeParser.parse(json))
         }
 
         operator fun invoke(json: JsonObject): JsonSchema {
-            TODO("Not yet implemented!")
+            val metaSchemaUrl = (json[MetaSchemaPointer] as? JsonPrimitive)?.content ?:
+                throw InvalidJsonSchema("No meta schema found.")
+
+            val metaSchema = JsonMetaSchema(metaSchemaUrl) ?:
+                throw InvalidJsonSchema("Doesn't support meta schema '$metaSchemaUrl'")
+
+            val schema = metaSchema.parser.parse(json)
+
+            return JsonSchema(metaSchema, schema)
         }
     }
+
+    // TODO: Figure out where those types belong
 
     interface Component {
         val key: String
     }
 
+    internal interface Schema : Validating
+
     enum class DataType {
-        Null, Boolean, Array, Object, Number, String, Integer
+        Null, Boolean, Array, Object, Number, String, Integer;
+
+        companion object {
+            fun parseFromString(value: kotlin.String) : DataType =
+                    DataType.values().find { it.name.toLowerCase() == value.toLowerCase() } ?:
+                        throw InvalidJsonSchema("Can not parse data type from: '$value'")
+        }
     }
 }
 
 internal enum class JsonMetaSchema(val url: URL) {
-    Draft8(URL("http://json-schema.org/draft-08/schema#"));
+    Draft8(URL("http://json-schema.org/draft-08/schema#")) {
+        override val parser: Parser<*>
+            get() = kovalscj.draft8.Parser
+    };
+
+    abstract val parser: Parser<*>
 
     companion object {
+        val MetaSchemaPointer = JsonPointer("#/\$schema")
+
         operator fun invoke(url: String) : JsonMetaSchema? {
             return values().find { it.url.toString() == url }
         }

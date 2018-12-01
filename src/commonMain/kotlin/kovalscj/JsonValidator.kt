@@ -1,10 +1,8 @@
 package kovalscj
 
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonTreeParser
 import kovalscj.ValidationOption.*
 import kovalscj.ValidationOptions.Companion.DEFAULT
-import kovalscj.ValidationOptions.Companion.QUIET
 
 // TODO: add configuration for format support
 
@@ -46,11 +44,14 @@ enum class ValidationOption {
     YIELD_WARNINGS
 }
 
-inline class ValidationOptions(val flags : Set<ValidationOption>) {
+inline class ValidationOptions(private val flags : Set<ValidationOption>) {
     constructor(vararg flags: ValidationOption) : this(flags.toSet())
 
-    fun contains(vararg elements: ValidationOption) =
+    fun contains(vararg elements: ValidationOption) : Boolean =
         flags.containsAll(elements.toList())
+    
+    operator fun get(vararg elements: ValidationOption) : Boolean = 
+        contains(*elements)
 
     companion object {
         /**
@@ -80,17 +81,19 @@ data class ValidationResult(
 ) {
     init {
         // Invariants:
-        if (options.contains(YIELD_ERRORS)) {
+        if (options[YIELD_ERRORS]) {
             require(errors != null)
         }
-        if (options.contains(YIELD_WARNINGS)) {
+        if (options[YIELD_WARNINGS]) {
             require(warnings != null)
         }
-        if ( options.contains(SCHEMA_COVERAGE)) {
+        if ( options[SCHEMA_COVERAGE]) {
             require(schemaCoverage != null)
+            TODO("Not yet implemented!")
         }
-        if ( options.contains(INSTANCE_COVERAGE)) {
+        if ( options[INSTANCE_COVERAGE]) {
             require(instanceCoverage != null)
+            TODO("Not yet implemented!")
         }
 
         if (!valid && errors != null) {
@@ -105,10 +108,10 @@ data class ValidationResult(
         operator fun invoke(options: ValidationOptions) : ValidationResult {
             return ValidationResult(
                 true,
-                if (options.contains(ValidationOption.YIELD_ERRORS)) { listOf() } else { null },
-                if (options.contains(ValidationOption.YIELD_WARNINGS)) { listOf() } else { null },
-                if (options.contains(ValidationOption.SCHEMA_COVERAGE)) { TODO("Not yet implemented!") } else { null },
-                if (options.contains(ValidationOption.INSTANCE_COVERAGE)) { TODO("Not yet implemented!") } else { null },
+                if (options[YIELD_ERRORS]) { listOf() } else { null },
+                if (options[YIELD_WARNINGS]) { listOf() } else { null },
+                if (options[SCHEMA_COVERAGE]) { TODO("Not yet implemented!") } else { null },
+                if (options[INSTANCE_COVERAGE]) { TODO("Not yet implemented!") } else { null },
                 options
             )
         }
@@ -121,10 +124,10 @@ data class ValidationResult(
         operator fun invoke(error: ValidationMessage, options: ValidationOptions) : ValidationResult {
             return ValidationResult(
                 false,
-                if (options.contains(ValidationOption.YIELD_ERRORS)) { listOf(error) } else { null },
-                if (options.contains(ValidationOption.YIELD_WARNINGS)) { listOf() } else { null },
-                if (options.contains(ValidationOption.SCHEMA_COVERAGE)) { TODO("Not yet implemented!") } else { null },
-                if (options.contains(ValidationOption.INSTANCE_COVERAGE)) { TODO("Not yet implemented!") } else { null },
+                if (options[YIELD_ERRORS]) { listOf(error) } else { null },
+                if (options[YIELD_WARNINGS]) { listOf() } else { null },
+                if (options[SCHEMA_COVERAGE]) { TODO("Not yet implemented!") } else { null },
+                if (options[INSTANCE_COVERAGE]) { TODO("Not yet implemented!") } else { null },
                 options
             )
         }
@@ -152,15 +155,17 @@ data class ValidationResult(
 }
 
 data class InvalidJson(val errors: List<ValidationMessage>) : Exception()
+class InvalidJsonSchema(message: String) : Exception(message)
+    // TODO May be an `InvalidJson` some day, if we actually validate schema JSON?
 
 data class ValidationMessage(
     override val message: String, // TODO add other helpful stuff
-    val inInstance: JsonPath, // ?
-    val inSchema: JsonPath, // ?
+    val inInstance: JsonPointer, // ?
+    val inSchema: JsonPointer, // ?
     val causes: List<ValidationMessage> = listOf()
 ) : Exception(message)
 
-data class Coverage(val m: Map<JsonPath, List<Pair<JsonPath, Boolean>>>) {
+data class Coverage(val m: Map<JsonPointer, List<Pair<JsonPointer, Boolean>>>) {
     fun plus(other: Coverage): Coverage {
         TODO("Not yet implemented!")
     }

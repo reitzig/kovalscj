@@ -1,11 +1,12 @@
-package kovalscj
+package kovalscj.draft8
 
 import kotlinx.serialization.json.JsonElement
+import kovalscj.*
 import kovalscj.JsonSchema.Component
 import kovalscj.ValidationResult.Invalid
 import kovalscj.ValidationResult.Valid
 
-sealed class Schema : Validating {
+sealed class Schema : Validating, JsonSchema.Schema {
     data class Proper(val components: List<Component>) : Schema() {
         override fun validate(json: JsonElement, options: ValidationOptions): ValidationResult {
             return components.
@@ -14,6 +15,7 @@ sealed class Schema : Validating {
                 reduce(ValidationResult::plus)
             // TODO: sort so that type (and ... ?) is checked first
             // TODO: migrate to coroutines or parallel collection
+            // TODO: Doesn't work like this with Draft 8 annotators.
         }
     }
 
@@ -27,8 +29,8 @@ sealed class Schema : Validating {
                 Invalid(
                     ValidationMessage(
                         "Value should not exist.",
-                        JsonPath(listOf()), // TODO implement
-                        JsonPath(listOf()) // TODO implement
+                        JsonPointer(listOf()), // TODO implement
+                        JsonPointer(listOf()) // TODO implement
                     ),
                     options
                 )
