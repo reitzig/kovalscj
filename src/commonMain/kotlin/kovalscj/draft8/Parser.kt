@@ -55,6 +55,7 @@ object Parser : Parser<Schema> {
             Annotation.Definitions.key -> Annotation.Definitions
 
             Assertion.Type.key -> Assertion.Type
+            Assertion.Enum.key -> Assertion.Enum
             else -> null // TODO: log warning "Unknown key in schema: '$key'"
         }
         check(parser == null || parser.key == key)

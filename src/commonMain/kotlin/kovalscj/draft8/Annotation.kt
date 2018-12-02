@@ -51,6 +51,9 @@ sealed class Annotation(override val key: String) : Component {
      * This keyword's value MUST be an object. Each member value of this object MUST be a valid JSON Schema.
      */
     data class Definitions(val definitions: Map<String, Schema>) : Annotation(key) {
+        operator fun get(key: String) =
+            definitions[key]
+
         companion object : ComponentParser<Definitions> {
             override val key: String = "definitions"
 

@@ -4,6 +4,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.JsonTreeParser
+import kovalscj.ComponentParser.Companion.parseAsString
 import kovalscj.JsonMetaSchema.Companion.MetaSchemaPointer
 import kovalscj.ValidationOptions.Companion.DEFAULT
 import kovalscj.ValidationOptions.Companion.QUIET
@@ -74,6 +75,9 @@ class JsonSchema internal constructor (
             fun parseFromString(value: kotlin.String) : DataType =
                     DataType.values().find { it.name.toLowerCase() == value.toLowerCase() } ?:
                         throw InvalidJsonSchema("Can not parse data type from: '$value'")
+
+            fun parseFromJson(value: JsonElement) : DataType =
+                    parseFromString(parseAsString(value))
         }
     }
 }

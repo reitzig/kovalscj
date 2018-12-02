@@ -1,9 +1,11 @@
 package kovalscj.draft8
 
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kovalscj.*
-import kovalscj.ComponentParser.Companion.parseAsString
+import kovalscj.ComponentParser.Companion.parseAsArray
 import kovalscj.JsonSchema.Component
 import kovalscj.JsonSchema.DataType
 import kovalscj.ValidationResult.Invalid
@@ -32,14 +34,18 @@ sealed class Assertion(override val key: String) : Component, Validating {
      * or "integer" which matches any number with a zero fractional part.
      * An instance validates if and only if the instance is in any of the sets listed for this keyword.
      */
-    data class Type(val type: DataType) : Assertion(key) {
+    data class Type(val types: Set<DataType>) : Assertion(key) {
+        init {
+            require(types.isNotEmpty()) // TODO: confirm that that's in the spirit of the schema?
+        }
+
         override fun validate(json: JsonElement, options: ValidationOptions): ValidationResult {
-            return if (json.`is`(type)) {
+            return if (types.find { json.`is`(it) } != null ) {
                 Valid(options)
             } else {
                 Invalid(
                     ValidationMessage(
-                        "Value is not one of type $type",
+                        "Value is not one of types $types",
                         JsonPointer(listOf()), // TODO implement
                         JsonPointer(listOf()) // TODO implement
                     ),
@@ -51,8 +57,14 @@ sealed class Assertion(override val key: String) : Component, Validating {
         companion object : ComponentParser<Type> {
             override val key: String = "type"
 
-            override fun parse(json: JsonElement, pointer: JsonPointer): Type =
-                Type(DataType.parseFromString(parseAsString(json)))
+            override fun parse(json: JsonElement, pointer: JsonPointer): Type {
+                return when (json) {
+                    is JsonArray -> Type(json.map { DataType.parseFromJson(it) }.toSet())
+                        // TODO: protest if array wasn't unique
+                    is JsonPrimitive -> Type(setOf(DataType.parseFromJson(json)))
+                    else -> throw InvalidJsonSchema("Can not parse a type from: '$json'")
+                }
+            }
         }
     }
 
@@ -64,7 +76,7 @@ sealed class Assertion(override val key: String) : Component, Validating {
      *
      * Elements in the array might be of any value, including null.
      */
-    data class Enum(val values: List<JsonElement>) : Assertion("enum") {
+    data class Enum(val values: List<JsonElement>) : Assertion(key) {
         override fun validate(json: JsonElement, options: ValidationOptions): ValidationResult {
             return if (values.contains(json)) {
                 Valid(options)
@@ -78,6 +90,14 @@ sealed class Assertion(override val key: String) : Component, Validating {
                     options
                 )
             }
+        }
+
+        companion object : ComponentParser<Enum> {
+            override val key: String = "enum"
+
+            override fun parse(json: JsonElement, pointer: JsonPointer): Enum =
+                Enum(parseAsArray(json))
+                // TODO: add warnings for empty array and duplicates
         }
     }
 
