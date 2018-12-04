@@ -6,6 +6,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kovalscj.*
 import kovalscj.ComponentParser.Companion.parseAsArray
+import kovalscj.ComponentParser.Companion.parseAsObject
 import kovalscj.JsonSchema.Component
 import kovalscj.JsonSchema.DataType
 import kovalscj.ValidationResult.Invalid
@@ -35,6 +36,11 @@ sealed class Assertion(override val key: String) : Component, Validating {
      * An instance validates if and only if the instance is in any of the sets listed for this keyword.
      */
     data class Type(val types: Set<DataType>) : Assertion(key) {
+        constructor(vararg types: DataType) : this(types.toSet())
+
+        fun contains(type: DataType) =
+            types.contains(type)
+
         init {
             require(types.isNotEmpty()) // TODO: confirm that that's in the spirit of the schema?
         }
@@ -61,7 +67,7 @@ sealed class Assertion(override val key: String) : Component, Validating {
                 return when (json) {
                     is JsonArray -> Type(json.map { DataType.parseFromJson(it) }.toSet())
                         // TODO: protest if array wasn't unique
-                    is JsonPrimitive -> Type(setOf(DataType.parseFromJson(json)))
+                    is JsonPrimitive -> Type(DataType.parseFromJson(json))
                     else -> throw InvalidJsonSchema("Can not parse a type from: '$json'")
                 }
             }
@@ -77,6 +83,11 @@ sealed class Assertion(override val key: String) : Component, Validating {
      * Elements in the array might be of any value, including null.
      */
     data class Enum(val values: List<JsonElement>) : Assertion(key) {
+        constructor(vararg values: JsonElement) : this(values.toList())
+
+        operator fun get(i: Int) =
+            values[i]
+
         override fun validate(json: JsonElement, options: ValidationOptions): ValidationResult {
             return if (values.contains(json)) {
                 Valid(options)
@@ -96,7 +107,7 @@ sealed class Assertion(override val key: String) : Component, Validating {
             override val key: String = "enum"
 
             override fun parse(json: JsonElement, pointer: JsonPointer): Enum =
-                Enum(parseAsArray(json))
+                Enum(parseAsArray(json) as List<JsonElement>)
                 // TODO: add warnings for empty array and duplicates
         }
     }
@@ -106,7 +117,7 @@ sealed class Assertion(override val key: String) : Component, Validating {
      *
      * An instance validates successfully against this keyword if its value is equal to the value of the keyword.
      */
-    data class Const(val value: JsonElement) : Assertion("const") {
+    data class Const(val value: JsonElement) : Assertion(key) {
         override fun validate(json: JsonElement, options: ValidationOptions): ValidationResult {
             return if (value == json) {
                 Valid(options)
@@ -120,6 +131,13 @@ sealed class Assertion(override val key: String) : Component, Validating {
                     options
                 )
             }
+        }
+
+        companion object : ComponentParser<Const> {
+            override val key: String = "const"
+
+            override fun parse(json: JsonElement, pointer: JsonPointer): Const =
+                Const(json)
         }
     }
 
@@ -140,7 +158,12 @@ sealed class Assertion(override val key: String) : Component, Validating {
      *
      * Omitting this keyword has the same behavior as an empty object.
      */
-    data class Properties(val propertySchemas: Map<String, Schema>) : Assertion("properties") {
+    data class Properties(val propertySchemas: Map<String, Schema>) : Assertion(key) {
+        constructor(vararg propertySchemas: Pair<String, Schema>) : this(propertySchemas.toMap())
+
+        operator fun get(key: String) =
+            propertySchemas[key]
+
         override fun validate(json: JsonElement, options: ValidationOptions): ValidationResult {
             require(json is JsonObject)
 
@@ -148,6 +171,15 @@ sealed class Assertion(override val key: String) : Component, Validating {
             return json.content.
                 mapNotNull { propertySchemas[it.key]?.validate(it.value, options) }.
                 reduce(ValidationResult::plus)
+        }
+
+        companion object : ComponentParser<Properties> {
+            override val key: String = "properties"
+
+            override fun parse(json: JsonElement, pointer: JsonPointer): Properties =
+                Properties(parseAsObject(json).map {
+                    Pair(it.key, Parser.parse(it.value, pointer + it.key))
+                }.toMap())
         }
     }
 
@@ -164,6 +196,11 @@ sealed class Assertion(override val key: String) : Component, Validating {
     * defined by this keyword's value.
     */
     data class AllOf(val subSchemas : List<Schema>) : Assertion("allOf") {
+        constructor(vararg subSchemas: Schema) : this(subSchemas.toList())
+
+        operator fun get(i: Int) =
+            subSchemas[i]
+
        init {
            require(subSchemas.isNotEmpty())
        }
@@ -181,6 +218,11 @@ sealed class Assertion(override val key: String) : Component, Validating {
     * schema defined by this keyword's value.
     */
     data class AnyOf(val subSchemas: List<Schema>) : Assertion("anyOf") {
+        constructor(vararg subSchemas: Schema) : this(subSchemas.toList())
+
+        operator fun get(i: Int) =
+            subSchemas[i]
+
        init {
            require(subSchemas.isNotEmpty())
        }
@@ -204,6 +246,11 @@ sealed class Assertion(override val key: String) : Component, Validating {
     * exactly one schema defined by this keyword's value.
     */
     data class OneOf(val subSchemas: List<Schema>) : Assertion("oneOf") {
+        constructor(vararg subSchemas: Schema) : this(subSchemas.toList())
+
+        operator fun get(i: Int) =
+            subSchemas[i]
+
        init {
            require(subSchemas.isNotEmpty())
        }

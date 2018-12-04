@@ -8,6 +8,11 @@ import kovalscj.ValidationResult.Valid
 
 sealed class Schema : Validating, JsonSchema.Schema {
     data class Proper(val components: List<Component>) : Schema() {
+        constructor(vararg components: Component) : this(components.toList())
+
+        operator fun get(i: Int) =
+            components[i]
+
         override fun validate(json: JsonElement, options: ValidationOptions): ValidationResult {
             return components.
                 filter { it is Validating }.
@@ -16,6 +21,7 @@ sealed class Schema : Validating, JsonSchema.Schema {
             // TODO: sort so that type (and ... ?) is checked first
             // TODO: migrate to coroutines or parallel collection
             // TODO: Doesn't work like this with Draft 8 annotators.
+            // TODO: warn about duplicates (or error out? what does the spec say?)
         }
     }
 

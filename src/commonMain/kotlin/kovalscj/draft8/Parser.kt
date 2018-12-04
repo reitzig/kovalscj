@@ -48,18 +48,22 @@ object Parser : Parser<Schema> {
      * @throws InvalidJsonSchema
      */
     private fun parserFor(key: String) : ComponentParser<*>? {
-        val parser = when (key) {
-            Annotation.Id.key -> Annotation.Id
-            Annotation.Title.key -> Annotation.Title
-            Annotation.Description.key -> Annotation.Description
-            Annotation.Definitions.key -> Annotation.Definitions
-
-            Assertion.Type.key -> Assertion.Type
-            Assertion.Enum.key -> Assertion.Enum
-            else -> null // TODO: log warning "Unknown key in schema: '$key'"
-        }
+        val parser = componentParsers[key]
         check(parser == null || parser.key == key)
 
+        // TODO: if it's null, log warning "Unknown key in schema: '$key'"
         return parser
     }
+
+    private val componentParsers = listOf<ComponentParser<*>>(
+        Annotation.Definitions,
+        Annotation.Description,
+        Annotation.Id,
+        Annotation.Title,
+
+        Assertion.Const,
+        Assertion.Enum,
+        Assertion.Properties,
+        Assertion.Type
+    ).map { Pair(it.key, it)  }.toMap()
 }

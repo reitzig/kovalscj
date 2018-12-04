@@ -1,10 +1,15 @@
 package kovalscj.draft8
 
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.intOrNull
 import kovalscj.InvalidJsonSchema
 import kovalscj.JsonMetaSchema
 import kovalscj.JsonSchema
 import kovalscj.JsonSchema.DataType.Null
+import kovalscj.JsonSchema.DataType.Number
+import kovalscj.draft8.Assertion.Enum
+import kovalscj.draft8.Assertion.Type
+import kovalscj.draft8.Schema.Proper
 import kotlin.test.*
 
 class ParserTest {
@@ -22,7 +27,7 @@ class ParserTest {
         val schema = JsonSchema(string)
 
         assertEquals(schema.jsonMetaSchema, JsonMetaSchema.Draft8)
-        assertTrue(schema.actualSchema is Schema.Proper)
+        assertTrue(schema.actualSchema is Proper)
         assertEquals(3, schema.actualSchema.components.size)
 
         val title = schema.actualSchema["title"]
@@ -34,7 +39,7 @@ class ParserTest {
         assertEquals("Something to test the parser with", description.value)
 
         val type = schema.actualSchema["type"]
-        assertTrue(type is Assertion.Type)
+        assertTrue(type is Type)
         assertEquals(JsonSchema.DataType.Object, type.types.first())
     }
 
@@ -125,13 +130,13 @@ class ParserTest {
 
         val schema = JsonSchema(string)
 
-        assertTrue(schema.actualSchema is Schema.Proper)
+        assertTrue(schema.actualSchema is Proper)
         assertNotNull(schema.actualSchema["definitions"])
         val definitions = schema.actualSchema["definitions"]
         assertTrue(definitions is Annotation.Definitions)
         val foo = definitions["foo"]
         assertNotNull(foo)
-        assertTrue(foo is Schema.Proper)
+        assertTrue(foo is Proper)
         assertEquals(2, foo.components.size)
         //assertEquals(JsonPointer("#/definitions/foo"), foo.path) // TODO
     }
@@ -152,10 +157,10 @@ class ParserTest {
         """.trimIndent()
 
         val schema = JsonSchema(string)
-        assertTrue(schema.actualSchema is Schema.Proper)
+        assertTrue(schema.actualSchema is Proper)
 
         val type = schema.actualSchema["type"]
-        assertTrue(type is Assertion.Type)
+        assertTrue(type is Type)
         assertEquals(setOf(JsonSchema.DataType.String), type.types)
     }
 
@@ -171,10 +176,10 @@ class ParserTest {
         """.trimIndent()
 
         val schema = JsonSchema(string)
-        assertTrue(schema.actualSchema is Schema.Proper)
+        assertTrue(schema.actualSchema is Proper)
 
         val type = schema.actualSchema["type"]
-        assertTrue(type is Assertion.Type)
+        assertTrue(type is Type)
         assertEquals(setOf(JsonSchema.DataType.String, Null), type.types)
     }
 
@@ -208,13 +213,64 @@ class ParserTest {
 
         val schema = JsonSchema(string)
 
-        assertTrue(schema.actualSchema is Schema.Proper)
+        assertTrue(schema.actualSchema is Proper)
         val enum = schema.actualSchema["enum"]
         assertNotNull(enum)
-        assertTrue(enum is Assertion.Enum)
+        assertTrue(enum is Enum)
         assertEquals(listOf(42, 77), enum.values.mapNotNull { (it as? JsonPrimitive)?.intOrNull })
+    }
+
+    @Test
+    fun testConst() {
+        val string = """
+        {
+            "${'$'}schema": "http://json-schema.org/draft-08/schema#",
+            "title": "A test schema",
+            "description": "Something to test the parser with",
+            "type": "integer",
+            "const": 42
+        }
+        """.trimIndent()
+
+        val schema = JsonSchema(string)
+
+        assertTrue(schema.actualSchema is Proper)
+        val const = schema.actualSchema["const"]
+        assertNotNull(const)
+        assertTrue(const is Assertion.Const)
+        assertEquals(42, (const.value as? JsonPrimitive)?.intOrNull)
+    }
+
+    @Test
+    fun testProperties() {
+        val string = """
+        {
+            "${'$'}schema": "http://json-schema.org/draft-08/schema#",
+            "title": "A test schema",
+            "description": "Something to test the parser with",
+            "type": "object",
+            "properties": {
+                "foo": {
+                    "type": "number"
+                },
+                "bar": {
+                    "enum": [42, 77]
+                }
+            }
+        }
+        """.trimIndent()
+
+        val schema = JsonSchema(string)
+
+        assertTrue(schema.actualSchema is Proper)
+        val properties = schema.actualSchema["properties"]
+        assertNotNull(properties)
+        assertTrue(properties is Assertion.Properties)
+        assertEquals(Proper(Type(Number)), properties.propertySchemas["foo"])
+        //assertEquals(Proper(Enum(JsonLiteral(42), JsonLiteral(77))), properties.propertySchemas["bar"]) // TODO: fails?
+        assertEquals(listOf(42, 77), ((properties.propertySchemas["bar"] as? Proper)?.components?.get(0) as? Enum)?.values?.map { it.intOrNull })
     }
 }
 
-operator fun Schema.Proper.get(key: String): JsonSchema.Component =
+operator fun Proper.get(key: String): JsonSchema.Component =
     this.components.first { it.key == key }
