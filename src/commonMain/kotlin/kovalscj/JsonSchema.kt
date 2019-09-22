@@ -1,9 +1,7 @@
 package kovalscj
 
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.JsonTreeParser
+import koparj.Json
+import koparj.parser.JsonParser
 import kovalscj.ComponentParser.Companion.parseAsString
 import kovalscj.JsonMetaSchema.Companion.MetaSchemaPointer
 import kovalscj.ValidationOptions.Companion.DEFAULT
@@ -16,11 +14,11 @@ class JsonSchema internal constructor (
     internal val jsonMetaSchema: JsonMetaSchema,
     internal val actualSchema: Schema
 ) {
-    fun validate(json: JsonElement, options: ValidationOptions = DEFAULT): ValidationResult {
+    fun validate(json: Json.Element<*>, options: ValidationOptions = DEFAULT): ValidationResult {
         return actualSchema.validate(json, options)
     }
 
-    fun validateOrThrow(json: JsonElement, options: ValidationOptions = QUIET) {
+    fun validateOrThrow(json: Json.Element<*>, options: ValidationOptions = QUIET) {
         val result = validate(json, options)
         if (!result.valid) {
             throw result.asError()
@@ -28,11 +26,11 @@ class JsonSchema internal constructor (
     }
 
     fun validate(json: String, options: ValidationOptions = DEFAULT) : ValidationResult {
-        return validate(JsonTreeParser.parse(json), options)
+        return validate(JsonParser.parse(json), options)
     }
 
     fun validateOrThrow(json: String, options: ValidationOptions = QUIET) {
-        validateOrThrow(JsonTreeParser.parse(json), options)
+        validateOrThrow(JsonParser.parse(json), options)
     }
 
     companion object {
@@ -44,11 +42,14 @@ class JsonSchema internal constructor (
         operator fun invoke(json: String): JsonSchema {
             // TODO: Make more efficient by directly parsing to `JsonSchema`
             //       --> custom `DeserializationStrategy<JsonSchema>`
-            return this(JsonTreeParser.parse(json))
+            return this(JsonParser.parse(json))
         }
 
-        operator fun invoke(json: JsonObject): JsonSchema {
-            val metaSchemaUrl = (json[MetaSchemaPointer] as? JsonPrimitive)?.content ?:
+        operator fun invoke(json: Json.Element<*>): JsonSchema {
+            if (json !is Json.Object<*,*>) {
+                throw InvalidJsonSchema("Schemas have to be JSON objects.")
+            }
+            val metaSchemaUrl = (json[MetaSchemaPointer] as? Json.String)?.value ?:
                 throw InvalidJsonSchema("No meta schema found.")
 
             val metaSchema = JsonMetaSchema(metaSchemaUrl) ?:
@@ -76,7 +77,7 @@ class JsonSchema internal constructor (
                     DataType.values().find { it.name.toLowerCase() == value.toLowerCase() } ?:
                         throw InvalidJsonSchema("Can not parse data type from: '$value'")
 
-            fun parseFromJson(value: JsonElement) : DataType =
+            fun parseFromJson(value: Json.Element<*>) : DataType =
                     parseFromString(parseAsString(value))
         }
     }
@@ -99,19 +100,19 @@ internal enum class JsonMetaSchema(val url: URL) {
     }
 }
 
-fun JsonElement.isValid(schema: JsonSchema, options: ValidationOptions = QUIET) : Boolean {
+fun Json.Element<*>.isValid(schema: JsonSchema, options: ValidationOptions = QUIET) : Boolean {
     return schema.validate(this, options).valid
 }
 
-fun JsonElement.isValid(options: ValidationOptions = QUIET) : Boolean {
+fun Json.Element<*>.isValid(options: ValidationOptions = QUIET) : Boolean {
     return this.validate(options).valid
 }
 
-fun JsonElement.validate(schema: JsonSchema, options: ValidationOptions = DEFAULT) : ValidationResult {
+fun Json.Element<*>.validate(schema: JsonSchema, options: ValidationOptions = DEFAULT) : ValidationResult {
     return schema.validate(this, options)
 }
 
-fun JsonElement.validate(options: ValidationOptions = DEFAULT) : ValidationResult {
+fun Json.Element<*>.validate(options: ValidationOptions = DEFAULT) : ValidationResult {
     TODO("Not yet implemented!")
     // --> extract schema URL from JSON
 }

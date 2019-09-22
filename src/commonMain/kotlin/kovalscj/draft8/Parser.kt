@@ -1,8 +1,6 @@
 package kovalscj.draft8
 
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
+import koparj.Json
 import kovalscj.ComponentParser
 import kovalscj.InvalidJsonSchema
 import kovalscj.JsonMetaSchema.Companion.MetaSchemaPointer
@@ -10,37 +8,31 @@ import kovalscj.JsonPointer
 import kovalscj.Parser
 
 object Parser : Parser<Schema> {
-    override fun parse(json: JsonObject): Schema {
+    override fun parse(json: Json.Object<*,*>): Schema {
         return parse(json, JsonPointer("#/"))
     }
 
     /**
      * @throws InvalidJsonSchema
      */
-    internal fun parse(json: JsonElement, path: JsonPointer) : Schema {
+    internal fun parse(json: Json.Element<*>, path: JsonPointer) : Schema {
         when (json) {
-            is JsonPrimitive -> {
-                return when (json.booleanOrNull) {
-                    true -> Schema.True
-                    false -> Schema.False
-                    else -> throw InvalidJsonSchema("Not a valid schema: '$json'")
-                }
-            }
-            is JsonObject -> {
+            is Json.True -> return Schema.True
+            is Json.False -> return Schema.False
+            is Json.Object<*,*> -> {
                 return Schema.Proper(
-                    json.content.
-                        filterNot { it.key == MetaSchemaPointer.elements.last() }.
+                    json.filterNot { it.key.value == MetaSchemaPointer.elements.last() }.
                         mapNotNull {
-                            val key = it.key
+                            val keyValue = it.key.value
                             val value = it.value
 
-                            val component = parserFor(key)?.parse(value, path + key)
-                            check(component == null || component.key == key)
+                            val component = parserFor(keyValue)?.parse(value, path + keyValue)
+                            check(component == null || component.key == keyValue)
                             return@mapNotNull component
                         }
                 )
             }
-            else -> throw InvalidJsonSchema("Can not parse JSON of type '${json::class.simpleName}' into a JSON schema.")
+            else -> throw InvalidJsonSchema("Can not parse JSON of type '${json::class}' into a JSON schema.")
         }
     }
 

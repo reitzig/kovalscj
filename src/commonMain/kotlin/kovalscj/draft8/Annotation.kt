@@ -1,6 +1,6 @@
 package kovalscj.draft8
 
-import kotlinx.serialization.json.JsonElement
+import koparj.Json
 import kovalscj.ComponentParser
 import kovalscj.ComponentParser.Companion.parseAsObject
 import kovalscj.ComponentParser.Companion.parseAsString
@@ -15,7 +15,7 @@ sealed class Annotation(override val key: String) : Component {
         companion object : ComponentParser<Id> {
             override val key: String = "\$id"
 
-            override fun parse(json: JsonElement, pointer: JsonPointer): Id =
+            override fun parse(json: Json.Element<*>, pointer: JsonPointer): Id =
                 Id(parseAsString(json))
         }
     }
@@ -24,7 +24,7 @@ sealed class Annotation(override val key: String) : Component {
         companion object : ComponentParser<Title> {
             override val key: String = "title"
 
-            override fun parse(json: JsonElement, pointer: JsonPointer): Title =
+            override fun parse(json: Json.Element<*>, pointer: JsonPointer): Title =
                 Title(parseAsString(json))
         }
     }
@@ -33,7 +33,7 @@ sealed class Annotation(override val key: String) : Component {
         companion object : ComponentParser<Description> {
             override val key: String = "description"
 
-            override fun parse(json: JsonElement, pointer: JsonPointer): Description =
+            override fun parse(json: Json.Element<*>, pointer: JsonPointer): Description =
                 Description(parseAsString(json))
         }
     }
@@ -52,15 +52,18 @@ sealed class Annotation(override val key: String) : Component {
      */
     data class Definitions(val definitions: Map<String, Schema>) : Annotation(key) {
         constructor(vararg definitions: Pair<String, Schema>) : this(definitions.toMap())
-        
+
         operator fun get(key: String) =
             definitions[key]
 
         companion object : ComponentParser<Definitions> {
             override val key: String = "definitions"
 
-            override fun parse(json: JsonElement, pointer: JsonPointer): Definitions =
-                   Definitions(parseAsObject(json).mapValues { Parser.parse(it.value, pointer + it.key) })
+            override fun parse(json: Json.Element<*>, pointer: JsonPointer): Definitions =
+                   Definitions(parseAsObject(json)
+                       .map { it.key.value to Parser.parse(it.value, pointer + it.key.value) }
+                       .toMap()
+                   )
         }
     }
 }

@@ -1,7 +1,6 @@
 package kovalscj.draft8
 
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.intOrNull
+import koparj.parser.JsonElement
 import kovalscj.InvalidJsonSchema
 import kovalscj.JsonMetaSchema
 import kovalscj.JsonSchema
@@ -217,7 +216,7 @@ class ParserTest {
         val enum = schema.actualSchema["enum"]
         assertNotNull(enum)
         assertTrue(enum is Enum)
-        assertEquals(listOf(42, 77), enum.values.mapNotNull { (it as? JsonPrimitive)?.intOrNull })
+        assertEquals(listOf(JsonElement.Number(42), JsonElement.Number(77)), enum.values)
     }
 
     @Test
@@ -238,7 +237,7 @@ class ParserTest {
         val const = schema.actualSchema["const"]
         assertNotNull(const)
         assertTrue(const is Assertion.Const)
-        assertEquals(42, (const.value as? JsonPrimitive)?.intOrNull)
+        assertEquals(42, (const.value as? JsonElement.Number)?.value?.toInt())
     }
 
     @Test
@@ -267,8 +266,7 @@ class ParserTest {
         assertNotNull(properties)
         assertTrue(properties is Assertion.Properties)
         assertEquals(Proper(Type(Number)), properties.propertySchemas["foo"])
-        //assertEquals(Proper(Enum(JsonLiteral(42), JsonLiteral(77))), properties.propertySchemas["bar"]) // TODO: fails?
-        assertEquals(listOf(42, 77), ((properties.propertySchemas["bar"] as? Proper)?.components?.get(0) as? Enum)?.values?.map { it.intOrNull })
+        assertEquals(Proper(Enum(JsonElement.Number(42), JsonElement.Number(77))), properties.propertySchemas["bar"])
     }
 }
 

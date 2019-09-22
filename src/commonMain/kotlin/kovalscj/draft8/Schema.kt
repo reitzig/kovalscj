@@ -1,6 +1,6 @@
 package kovalscj.draft8
 
-import kotlinx.serialization.json.JsonElement
+import koparj.Json
 import kovalscj.*
 import kovalscj.JsonSchema.Component
 import kovalscj.ValidationResult.Invalid
@@ -13,7 +13,7 @@ sealed class Schema : Validating, JsonSchema.Schema {
         operator fun get(i: Int) =
             components[i]
 
-        override fun validate(json: JsonElement, options: ValidationOptions): ValidationResult {
+        override fun validate(json: Json.Element<*>, options: ValidationOptions): ValidationResult {
             return components.
                 filter { it is Validating }.
                 map { (it as Validating).validate(json, options) }.
@@ -22,16 +22,17 @@ sealed class Schema : Validating, JsonSchema.Schema {
             // TODO: migrate to coroutines or parallel collection
             // TODO: Doesn't work like this with Draft 8 annotators.
             // TODO: warn about duplicates (or error out? what does the spec say?)
+            // TODO: warn about ignored assertions (e.g. because they don't work for `type`)
         }
     }
 
     object True : Schema() {
-        override fun validate(json: JsonElement, options: ValidationOptions): ValidationResult =
+        override fun validate(json: Json.Element<*>, options: ValidationOptions): ValidationResult =
                 Valid(options)
     }
 
     object False : Schema() {
-        override fun validate(json: JsonElement, options: ValidationOptions): ValidationResult =
+        override fun validate(json: Json.Element<*>, options: ValidationOptions): ValidationResult =
                 Invalid(
                     ValidationMessage(
                         "Value should not exist.",

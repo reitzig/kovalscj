@@ -1,6 +1,6 @@
 package kovalscj
 
-import kotlinx.serialization.json.JsonElement
+import koparj.Json
 import kovalscj.ValidationOption.*
 import kovalscj.ValidationOptions.Companion.DEFAULT
 
@@ -49,8 +49,8 @@ inline class ValidationOptions(private val flags : Set<ValidationOption>) {
 
     fun contains(vararg elements: ValidationOption) : Boolean =
         flags.containsAll(elements.toList())
-    
-    operator fun get(vararg elements: ValidationOption) : Boolean = 
+
+    operator fun get(vararg elements: ValidationOption) : Boolean =
         contains(*elements)
 
     companion object {
@@ -68,7 +68,7 @@ inline class ValidationOptions(private val flags : Set<ValidationOption>) {
 
 interface Validating {
     // TODO pass down paths/pointers!
-    fun validate(json: JsonElement, options: ValidationOptions) : ValidationResult
+    fun validate(json: Json.Element<*>, options: ValidationOptions) : ValidationResult
 }
 
 data class ValidationResult(

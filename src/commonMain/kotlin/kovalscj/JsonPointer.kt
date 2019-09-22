@@ -1,8 +1,7 @@
 package kovalscj
 
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
+import koparj.Json
+import koparj.parser.JsonElement
 
 // TODO consolidate with JSON Pointer; implement properly
 inline class JsonPointer(val elements: List<String>) {
@@ -34,7 +33,7 @@ inline class JsonPointer(val elements: List<String>) {
             JsonPointer(this.elements + other.elements)
 }
 
-operator fun JsonElement.get(pointer: JsonPointer) : JsonElement? {
+operator fun Json.Element<*>.get(pointer: JsonPointer) : Json.Element<*>? {
     return if ( pointer.elements.isEmpty()) {
         this
     } else if (pointer.elements.first() == JsonPointer.ROOT) {
@@ -45,10 +44,10 @@ operator fun JsonElement.get(pointer: JsonPointer) : JsonElement? {
         TODO("Not yet implemented!")
     } else {
         when (this) {
-            is JsonObject -> {
-                this.getOrNull(pointer.elements.first())?.get(pointer.dropFirst())
+            is JsonElement.Object -> {
+                this.get(pointer.elements.first())?.get(pointer.dropFirst())
             }
-            is JsonArray -> {
+            is JsonElement.Array -> {
                 val index = pointer.elements.first().toIntOrNull()
                 if (index != null) {
                     this.getOrNull(index)?.get(pointer.dropFirst())

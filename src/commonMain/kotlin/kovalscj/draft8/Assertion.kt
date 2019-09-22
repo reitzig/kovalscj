@@ -1,9 +1,6 @@
 package kovalscj.draft8
 
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
+import koparj.Json
 import kovalscj.*
 import kovalscj.ComponentParser.Companion.parseAsArray
 import kovalscj.ComponentParser.Companion.parseAsObject
@@ -45,7 +42,7 @@ sealed class Assertion(override val key: String) : Component, Validating {
             require(types.isNotEmpty()) // TODO: confirm that that's in the spirit of the schema?
         }
 
-        override fun validate(json: JsonElement, options: ValidationOptions): ValidationResult {
+        override fun validate(json: Json.Element<*>, options: ValidationOptions): ValidationResult {
             return if (types.find { json.`is`(it) } != null ) {
                 Valid(options)
             } else {
@@ -63,11 +60,11 @@ sealed class Assertion(override val key: String) : Component, Validating {
         companion object : ComponentParser<Type> {
             override val key: String = "type"
 
-            override fun parse(json: JsonElement, pointer: JsonPointer): Type {
+            override fun parse(json: Json.Element<*>, pointer: JsonPointer): Type {
                 return when (json) {
-                    is JsonArray -> Type(json.map { DataType.parseFromJson(it) }.toSet())
+                    is Json.Array<*> -> Type(json.map { DataType.parseFromJson(it) }.toSet())
                         // TODO: protest if array wasn't unique
-                    is JsonPrimitive -> Type(DataType.parseFromJson(json))
+                    is Json.String -> Type(DataType.parseFromJson(json))
                     else -> throw InvalidJsonSchema("Can not parse a type from: '$json'")
                 }
             }
@@ -82,13 +79,13 @@ sealed class Assertion(override val key: String) : Component, Validating {
      *
      * Elements in the array might be of any value, including null.
      */
-    data class Enum(val values: List<JsonElement>) : Assertion(key) {
-        constructor(vararg values: JsonElement) : this(values.toList())
+    data class Enum(val values: List<Json.Element<*>>) : Assertion(key) {
+        constructor(vararg values: Json.Element<*>) : this(values.toList())
 
         operator fun get(i: Int) =
             values[i]
 
-        override fun validate(json: JsonElement, options: ValidationOptions): ValidationResult {
+        override fun validate(json: Json.Element<*>, options: ValidationOptions): ValidationResult {
             return if (values.contains(json)) {
                 Valid(options)
             } else {
@@ -106,9 +103,10 @@ sealed class Assertion(override val key: String) : Component, Validating {
         companion object : ComponentParser<Enum> {
             override val key: String = "enum"
 
-            override fun parse(json: JsonElement, pointer: JsonPointer): Enum =
-                Enum(parseAsArray(json) as List<JsonElement>)
+            override fun parse(json: Json.Element<*>, pointer: JsonPointer): Enum =
+                Enum(parseAsArray(json) as List<Json.Element<*>>)
                 // TODO: add warnings for empty array and duplicates
+                // TODO: add warning (or error?) if values don't match `type`
         }
     }
 
@@ -117,8 +115,8 @@ sealed class Assertion(override val key: String) : Component, Validating {
      *
      * An instance validates successfully against this keyword if its value is equal to the value of the keyword.
      */
-    data class Const(val value: JsonElement) : Assertion(key) {
-        override fun validate(json: JsonElement, options: ValidationOptions): ValidationResult {
+    data class Const(val value: Json.Element<*>) : Assertion(key) {
+        override fun validate(json: Json.Element<*>, options: ValidationOptions): ValidationResult {
             return if (value == json) {
                 Valid(options)
             } else {
@@ -136,7 +134,7 @@ sealed class Assertion(override val key: String) : Component, Validating {
         companion object : ComponentParser<Const> {
             override val key: String = "const"
 
-            override fun parse(json: JsonElement, pointer: JsonPointer): Const =
+            override fun parse(json: Json.Element<*>, pointer: JsonPointer): Const =
                 Const(json)
         }
     }
@@ -164,21 +162,20 @@ sealed class Assertion(override val key: String) : Component, Validating {
         operator fun get(key: String) =
             propertySchemas[key]
 
-        override fun validate(json: JsonElement, options: ValidationOptions): ValidationResult {
-            require(json is JsonObject)
+        override fun validate(json: Json.Element<*>, options: ValidationOptions): ValidationResult {
+            require(json is Json.Object<*,*>)
 
             // TODO: keep a record for additionalProperties
-            return json.content.
-                mapNotNull { propertySchemas[it.key]?.validate(it.value, options) }.
-                reduce(ValidationResult::plus)
+            return json.mapNotNull { propertySchemas[it.key.value]?.validate(it.value, options) }
+                .reduce(ValidationResult::plus)
         }
 
         companion object : ComponentParser<Properties> {
             override val key: String = "properties"
 
-            override fun parse(json: JsonElement, pointer: JsonPointer): Properties =
+            override fun parse(json: Json.Element<*>, pointer: JsonPointer): Properties =
                 Properties(parseAsObject(json).map {
-                    Pair(it.key, Parser.parse(it.value, pointer + it.key))
+                    it.key.value to Parser.parse(it.value, pointer + it.key.value)
                 }.toMap())
         }
     }
@@ -205,7 +202,7 @@ sealed class Assertion(override val key: String) : Component, Validating {
            require(subSchemas.isNotEmpty())
        }
 
-       override fun validate(json: JsonElement, options: ValidationOptions): ValidationResult {
+       override fun validate(json: Json.Element<*>, options: ValidationOptions): ValidationResult {
            // TODO add this-level error
            return subSchemas.map { it.validate(json, options) }.reduce(ValidationResult::plus)
        }
@@ -227,7 +224,7 @@ sealed class Assertion(override val key: String) : Component, Validating {
            require(subSchemas.isNotEmpty())
        }
 
-       override fun validate(json: JsonElement, options: ValidationOptions): ValidationResult {
+       override fun validate(json: Json.Element<*>, options: ValidationOptions): ValidationResult {
            val results = subSchemas.map { it.validate(json, options) }
 
            return if (results.any { it.valid }) {
@@ -255,7 +252,7 @@ sealed class Assertion(override val key: String) : Component, Validating {
            require(subSchemas.isNotEmpty())
        }
 
-       override fun validate(json: JsonElement, options: ValidationOptions): ValidationResult {
+       override fun validate(json: Json.Element<*>, options: ValidationOptions): ValidationResult {
            val results = subSchemas.map { it.validate(json, options) }
 
            return if (results.count { it.valid } == 1) {
@@ -274,7 +271,7 @@ sealed class Assertion(override val key: String) : Component, Validating {
     * defined by this keyword.
     */
     data class Not(val schema: Schema) : Assertion("not") {
-       override fun validate(json: JsonElement, options: ValidationOptions): ValidationResult {
+       override fun validate(json: Json.Element<*>, options: ValidationOptions): ValidationResult {
            val result = schema.validate(json, options)
 
            return if (result.valid) {
@@ -320,7 +317,7 @@ sealed class Assertion(override val key: String) : Component, Validating {
     data class Ref(val url: URL) : Assertion("\$ref") {
        // TODO extend to handle pointers
        // TODO extend to prevent endless recursion
-       override fun validate(json: JsonElement, options: ValidationOptions): ValidationResult {
+       override fun validate(json: Json.Element<*>, options: ValidationOptions): ValidationResult {
            // TODO resolve while parsing the schema
            return JsonSchema(url).validate(json, options)
        }
